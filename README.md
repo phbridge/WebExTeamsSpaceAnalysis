@@ -28,11 +28,6 @@ Version 0.01 Date 28/02/21    Inital draft
 
 Version 0.02 Date 01/03/21    cleaned up ready for first publish
 
-Version 6.9 Date xx/xx/xx     Took over world and actuially got paid for value added work....If your reading this
-                              approach me on linkedin for details of weekend "daily" rate
-
-Version 7.0 Date xx/xx/xx     Note to the Gaffer - if your reading this then the above line is a joke only :-)
-
 # ToDo
 
 1.0 pull data from WxT            DONE
