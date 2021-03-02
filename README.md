@@ -8,6 +8,8 @@ Python 3.9
 This script will take data from one or more WxT spaces and analyse the content for sentiment, subjectivity and
 polarity. It will also pick out and count positive/negative words. The tool will then upload this data to an
 InfluxDB so that it can be easily displayed graphically.
+This script uses TextBlob which makes use of NLTK using some of the most common packages (averaged-tagger, 
+brown-corpora, punkt-tokenizer) for sentiment analysis 
 
 # Contacts
 Phil Bridges - phbridge@cisco.com
