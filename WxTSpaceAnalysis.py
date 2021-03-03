@@ -85,6 +85,13 @@ def check_space_for_new_content(last_x_messages=12):
                     else:
                         thread_dictionary[each_message['parentId']] = []
                         thread_dictionary[each_message['parentId']].append(datetime.datetime.timestamp(datetime.datetime.strptime(str(each_message['created']), "%Y-%m-%dT%H:%M:%S.%fZ")) * 1000000000)
+            people_url = "https://webexapis.com/v1/memberships?roomId=%s&max=500" % each_room
+            response = requests.get(url=people_url, headers=headers)
+            if response.status_code == 200:
+                json_for_analysis = json.loads(response.text)["items"]
+                for each_user in json_for_analysis:
+                    if not person_dictionary.get(each_user['personId']):
+                        person_dictionary[each_user['personId']] = each_user['personEmail']
             influx_string = ""
             for each_message in json_for_analysis:
                 polarity = 0
@@ -122,21 +129,78 @@ def check_space_for_new_content(last_x_messages=12):
                             thread_position += 1
                             if int(each) == int(datetime.datetime.timestamp(datetime.datetime.strptime(str(each_message['created']), "%Y-%m-%dT%H:%M:%S.%fZ")) * 1000000000):
                                 break
-                    influx_string += "WxTSpaceMessageAnalysis," \
-                                     "personId=%s,is_thread=%s,is_thread_response=%s,thread_position=%s " \
-                                     "polarity=%s,subjectivity=%s,words=%s,sentences=%s," \
-                                     "impact_words=%s,positive_words=%s,negative_words=%s," \
-                                     "thread_size=%s %s \n" % \
-                                     (each_message['personEmail'], is_thread, is_thread_response, thread_position,
-                                      polarity, subjectivity, len(blob.words), len(blob.sentences),
-                                      len(blob.sentiment_assessments[2]), positive_words, neagative_words,
-                                      thread_size, str(int(timestamp)))
+                    has_file = 0
+                    if each_message.get('files', False):
+                        has_file = len(each_message['files'])
+                    mentioned_people = 0
+                    if each_message.get('mentionedPeople', False):
+                        has_file = len(each_message['mentionedPeople'])
+                    words = len(blob.words)
+                    sentences = len(blob.sentences)
+                    impact_words = len(blob.sentiment_assessments[2])
+                    if each_message.get('mentionedPeople', False):
+                        has_file = len(each_message['mentionedPeople'])
+                        for each_mention in each_message['mentionedPeople']:
+                            try:
+                                influx_string += 'WxTSpaceMentionAnalysis,mentionie=%s,mentioner=%s total_mentioned=%s %s \n' % (person_dictionary[each_mention], each_message['personEmail'], len(each_message['mentionedPeople']), str(int(timestamp)))
+                            except KeyError as e:
+                                print("couldnt find personId = %s" % each_mention)
                 elif each_message.get('files'):
                     polarity = 0
                     subjectivity = 0
+                    words = 0
+                    sentences = 0
+                    impact_words = 0
+                    is_thread = False
+                    thread_size = 0
+                    if thread_dictionary.get(each_message['id'], False):
+                        is_thread = True
+                        thread_size = len(thread_dictionary[each_message['id']])
+                    is_thread_response = False
+                    thread_position = 0
+                    if each_message.get('parentId', False):
+                        is_thread_response = True
+                        temp_array = thread_dictionary[each_message['parentId']]
+                        temp_array.sort()
+                        # print(temp_array)
+                        for each in temp_array:
+                            thread_position += 1
+                            if int(each) == int(datetime.datetime.timestamp(datetime.datetime.strptime(str(each_message['created']), "%Y-%m-%dT%H:%M:%S.%fZ")) * 1000000000):
+                                break
+                    has_file = 0
+                    if each_message.get('files', False):
+                        has_file = len(each_message['files'])
+                    mentioned_people = 0
+                    if each_message.get('mentionedPeople', False):
+                        has_file = len(each_message['mentionedPeople'])
+                        for each_mention in each_message['mentionedPeople']:
+                            try:
+                                influx_string += 'WxTSpaceMentionAnalysis,mentionie=%s,mentioner=%s total_mentioned=%s %s \n' % (person_dictionary[each_mention], each_message['personEmail'], len(each_message['mentionedPeople']), str(int(timestamp)))
+                            except KeyError as e:
+                                print("couldnt find personId = %s" % each_mention)
                 else:
+                    polarity = 0
+                    subjectivity = 0
+                    words = 0
+                    sentences = 0
+                    impact_words = 0
+                    is_thread = False
+                    is_thread_response = False
+                    thread_position = 0
+                    thread_size = 0
+                    has_file = 0
+                    mentioned_people = 0
                     print("no text or file")
                     print(each_message)
+                influx_string += "WxTSpaceMessageAnalysis," \
+                                 "personId=%s,is_thread=%s,is_thread_response=%s,thread_position=%s " \
+                                 "polarity=%s,subjectivity=%s,words=%s,sentences=%s," \
+                                 "impact_words=%s,positive_words=%s,negative_words=%s," \
+                                 "thread_size=%s,attached_files=%s,mentioned_people=%s %s \n" % \
+                                 (each_message['personEmail'], is_thread, is_thread_response, thread_position,
+                                  polarity, subjectivity, words, sentences,
+                                  impact_words, positive_words, neagative_words,
+                                  thread_size, has_file, mentioned_people, str(int(timestamp)))
             update_influx(influx_string)
         else:
             function_logger.critical("something went wrong didnt get status 200 from WxT instead got %s" % response.status_code)
