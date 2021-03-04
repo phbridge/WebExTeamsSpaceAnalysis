@@ -40,10 +40,12 @@ Version 0.02 Date 01/03/21    cleaned up ready for first publish
 
 4.0 Include cloud analysis        FUTURE
 
-5.0 extend to includ reactions    FUTURE
+5.0 extend to includ reactions    FUTURE - NO API yet this will take a while
 
-6.0 extend to includ mentions     FUTURE
+6.0 extend to includ mentions     DONE
 
 7.0 handle the changing of tokens FUTURE
 
-8.0 do something with just files  FUTURE
+8.0 do something with just files  DONE 
+
+9.0 scare a thread on +/-ve       FUTURE
