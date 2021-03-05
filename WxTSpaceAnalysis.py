@@ -37,8 +37,8 @@
 # 2.0 provide some analysis         DONE
 # 3.0 send to Influx                DONE
 # 4.0 Include cloud analysis        FUTURE
-# 5.0 extend to includ reactions    FUTURE - NO API yet this will take a while
-# 6.0 extend to includ mentions     DONE
+# 5.0 extend to include reactions   FUTURE - NO API yet this will take a while
+# 6.0 extend to include mentions    DONE
 # 7.0 handle the changing of tokens FUTURE
 # 8.0 do something with just files  DONE
 # 9.0 score a thread on +/-ve       FUTURE
