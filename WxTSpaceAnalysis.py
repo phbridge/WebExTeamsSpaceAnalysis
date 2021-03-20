@@ -42,6 +42,7 @@
 # 7.0 handle the changing of tokens FUTURE
 # 8.0 do something with just files  DONE
 # 9.0 score a thread on +/-ve       FUTURE
+# 10.0 add check for woring hours   IN-PROGRESS
 
 
 import requests
@@ -63,6 +64,19 @@ LOGFILE = credentials.LOGFILE
 THREAD_TO_BREAK = threading.Event()
 INFLUX_DB_PATH = credentials.INFLUX_DB_PATH
 
+WORKING_DAYS = [0, 1, 2, 3, 4]  # 0=Monday, 6=Sunday
+WORKING_HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18] # 24 hour clock
+
+
+def check_working_hours(date_time_to_check):
+    if date_time_to_check.weekday() in WORKING_DAYS:  # Check to see if posted on weekend
+        if date_time_to_check.hour in WORKING_HOURS:  # Check to see if posted during working hours
+            return True
+        else:
+            return False
+    else:
+        return False
+
 
 def check_space_for_new_content(last_x_messages=12):
     function_logger = logger.getChild("%s.%s.%s" % (inspect.stack()[2][3], inspect.stack()[1][3], inspect.stack()[0][3]))
@@ -73,7 +87,8 @@ def check_space_for_new_content(last_x_messages=12):
         response = requests.get(url=url, headers=headers)
         if response.status_code == 200:
             json_for_analysis = json.loads(response.text)["items"]
-            print(json_for_analysis)
+            function_logger.debug(json_for_analysis)
+            function_logger.debug(json_for_analysis[0])
             print(len(json_for_analysis))
             person_dictionary = {}
             thread_dictionary = {}
@@ -89,11 +104,12 @@ def check_space_for_new_content(last_x_messages=12):
             people_url = "https://webexapis.com/v1/memberships?roomId=%s&max=500" % each_room
             response = requests.get(url=people_url, headers=headers)
             if response.status_code == 200:
-                json_for_analysis = json.loads(response.text)["items"]
-                for each_user in json_for_analysis:
+                user_json_for_analysis = json.loads(response.text)["items"]
+                for each_user in user_json_for_analysis:
                     if not person_dictionary.get(each_user['personId']):
                         person_dictionary[each_user['personId']] = each_user['personEmail']
             influx_string = ""
+
             for each_message in json_for_analysis:
                 polarity = 0
                 subjectivity = 0
@@ -101,15 +117,13 @@ def check_space_for_new_content(last_x_messages=12):
                 neagative_words = 0
                 person_email = "N/A"
                 timestamp = 0
-                # try:
                 timestamp = datetime.datetime.timestamp(datetime.datetime.strptime(str(each_message['created']), "%Y-%m-%dT%H:%M:%S.%fZ")) * 1000000000
-                # print(int(timestamp))
+                inside_working_hours = check_working_hours(datetime.datetime.strptime(str(each_message['created']), "%Y-%m-%dT%H:%M:%S.%fZ"))
                 if each_message.get('text'):
                     blob = TextBlob(each_message['text'])
                     polarity = blob.polarity
                     subjectivity = blob.subjectivity
                     for each in blob.sentiment_assessments[2]:
-                        # print(each)
                         if each[1] >= 0:
                             positive_words += 1
                         else:
@@ -125,7 +139,6 @@ def check_space_for_new_content(last_x_messages=12):
                         is_thread_response = True
                         temp_array = thread_dictionary[each_message['parentId']]
                         temp_array.sort()
-                        # print(temp_array)
                         for each in temp_array:
                             thread_position += 1
                             if int(each) == int(datetime.datetime.timestamp(datetime.datetime.strptime(str(each_message['created']), "%Y-%m-%dT%H:%M:%S.%fZ")) * 1000000000):
@@ -145,7 +158,7 @@ def check_space_for_new_content(last_x_messages=12):
                             try:
                                 influx_string += 'WxTSpaceMentionAnalysis,mentionie=%s,mentioner=%s total_mentioned=%s %s \n' % (person_dictionary[each_mention], each_message['personEmail'], len(each_message['mentionedPeople']), str(int(timestamp)))
                             except KeyError as e:
-                                print("couldnt find personId = %s" % each_mention)
+                                function_logger.critical("couldnt find personId = %s" % each_mention)
                 elif each_message.get('files'):
                     polarity = 0
                     subjectivity = 0
@@ -154,6 +167,7 @@ def check_space_for_new_content(last_x_messages=12):
                     impact_words = 0
                     is_thread = False
                     thread_size = 0
+                    inside_working_hours = check_working_hours(datetime.datetime.strptime(str(each_message['created']), "%Y-%m-%dT%H:%M:%S.%fZ"))
                     if thread_dictionary.get(each_message['id'], False):
                         is_thread = True
                         thread_size = len(thread_dictionary[each_message['id']])
@@ -163,7 +177,6 @@ def check_space_for_new_content(last_x_messages=12):
                         is_thread_response = True
                         temp_array = thread_dictionary[each_message['parentId']]
                         temp_array.sort()
-                        # print(temp_array)
                         for each in temp_array:
                             thread_position += 1
                             if int(each) == int(datetime.datetime.timestamp(datetime.datetime.strptime(str(each_message['created']), "%Y-%m-%dT%H:%M:%S.%fZ")) * 1000000000):
@@ -179,6 +192,19 @@ def check_space_for_new_content(last_x_messages=12):
                                 influx_string += 'WxTSpaceMentionAnalysis,mentionie=%s,mentioner=%s total_mentioned=%s %s \n' % (person_dictionary[each_mention], each_message['personEmail'], len(each_message['mentionedPeople']), str(int(timestamp)))
                             except KeyError as e:
                                 print("couldnt find personId = %s" % each_mention)
+                # elif each_message.get('isModerator', None) is not None and each_message.get('isMonitor', None) is not None:
+                #     polarity = 0
+                #     subjectivity = 0
+                #     words = 0
+                #     sentences = 0
+                #     impact_words = 0
+                #     is_thread = False
+                #     is_thread_response = False
+                #     thread_position = 0
+                #     thread_size = 0
+                #     has_file = 0
+                #     mentioned_people = 0
+                #     print("user %s was added to the space isModerator=%s, isMonitor=%s" % (each_message['personEmail'], each_message['isModerator'], each_message['isMonitor']))
                 else:
                     polarity = 0
                     subjectivity = 0
@@ -194,11 +220,11 @@ def check_space_for_new_content(last_x_messages=12):
                     print("no text or file")
                     print(each_message)
                 influx_string += "WxTSpaceMessageAnalysis," \
-                                 "personId=%s,is_thread=%s,is_thread_response=%s,thread_position=%s " \
+                                 "personId=%s,is_thread=%s,is_thread_response=%s,thread_position=%s,inside_working_hours=%s " \
                                  "polarity=%s,subjectivity=%s,words=%s,sentences=%s," \
                                  "impact_words=%s,positive_words=%s,negative_words=%s," \
                                  "thread_size=%s,attached_files=%s,mentioned_people=%s %s \n" % \
-                                 (each_message['personEmail'], is_thread, is_thread_response, thread_position,
+                                 (each_message['personEmail'], is_thread, is_thread_response, thread_position, inside_working_hours,
                                   polarity, subjectivity, words, sentences,
                                   impact_words, positive_words, neagative_words,
                                   thread_size, has_file, mentioned_people, str(int(timestamp)))
@@ -206,12 +232,11 @@ def check_space_for_new_content(last_x_messages=12):
         else:
             function_logger.critical("something went wrong didnt get status 200 from WxT instead got %s" % response.status_code)
             function_logger.critical("following bad status code content was :- %s" % response.content)
-            print(response.status_code)
-            print(response.content)
 
 
 def update_influx(raw_string, timestamp=None):
     function_logger = logger.getChild("%s.%s.%s" % (inspect.stack()[2][3], inspect.stack()[1][3], inspect.stack()[0][3]))
+    function_logger.info("updating influx")
     try:
         string_to_upload = ""
         if timestamp is not None:
@@ -228,10 +253,10 @@ def update_influx(raw_string, timestamp=None):
             attempt_error_array = []
             while attempts < 5 and not success:
                 try:
-                    upload_to_influx_sessions_response = upload_to_influx_sessions.post(url=influx_path_url, data=string_to_upload, timeout=(2, 1))
+                    upload_to_influx_sessions_response = upload_to_influx_sessions.post(url=influx_path_url, data=string_to_upload, timeout=(20, 10))
                     if upload_to_influx_sessions_response.status_code == 204:
                         function_logger.debug("content=%s" % upload_to_influx_sessions_response.content)
-                        function_logger.debug("status_code=%s" % upload_to_influx_sessions_response.status_code)
+                        function_logger.info("status_code=%s" % upload_to_influx_sessions_response.status_code)
                         success = True
                     else:
                         attempts += 1
