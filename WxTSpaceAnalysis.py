@@ -42,7 +42,7 @@
 # 7.0 handle the changing of tokens FUTURE
 # 8.0 do something with just files  DONE
 # 9.0 score a thread on +/-ve       FUTURE
-# 10.0 add check for woring hours   IN-PROGRESS
+# 10.0 add check for working hours  DONE
 
 
 import requests
