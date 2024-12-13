@@ -97,11 +97,14 @@ def check_space_for_new_content(last_x_messages=12):
     function_logger = logger.getChild("%s.%s.%s" % (inspect.stack()[2][3], inspect.stack()[1][3], inspect.stack()[0][3]))
     function_logger.info("checking space for new content")
     for each_room in WXT_SPACE_ID:
+        room_url = "https://webexapis.com/v1/rooms/%s" % each_room
         url = "https://webexapis.com/v1/messages?roomId=%s&max=%s" % (each_room, last_x_messages)  # 1000000000
         headers = {"Authorization": "Bearer %s" % WXT_ACCESS_TOKEN}
+        room_response = requests.get(url=room_url, headers=headers)
         response = requests.get(url=url, headers=headers)
-        if response.status_code == 200:
+        if response.status_code == 200 and room_response.status_code == 200:
             json_for_analysis = json.loads(response.text)["items"]
+            json_for_room_analysis = json.loads(room_response.text)
             function_logger.debug(json_for_analysis)
             function_logger.debug(json_for_analysis[0])
             print(len(json_for_analysis))
@@ -171,7 +174,8 @@ def check_space_for_new_content(last_x_messages=12):
                         has_file = len(each_message['mentionedPeople'])
                         for each_mention in each_message['mentionedPeople']:
                             try:
-                                influx_string += 'WxTSpaceMentionAnalysis,mentionie=%s,mentioner=%s total_mentioned=%s %s \n' % (person_dictionary[each_mention], each_message['personEmail'], len(each_message['mentionedPeople']), str(int(timestamp)))
+                                influx_string += ('WxTSpaceMentionAnalysis,room_id=%s,room_title="%s",mentionie=%s,mentioner=%s total_mentioned=%s %s \n' %
+                                                  (json_for_room_analysis["id"], json_for_room_analysis["title"], person_dictionary[each_mention], each_message['personEmail'], len(each_message['mentionedPeople']), str(int(timestamp))))
                             except KeyError as e:
                                 function_logger.critical("couldnt find personId = %s" % each_mention)
                 elif each_message.get('files'):
@@ -204,22 +208,11 @@ def check_space_for_new_content(last_x_messages=12):
                         has_file = len(each_message['mentionedPeople'])
                         for each_mention in each_message['mentionedPeople']:
                             try:
-                                influx_string += 'WxTSpaceMentionAnalysis,mentionie=%s,mentioner=%s total_mentioned=%s %s \n' % (person_dictionary[each_mention], each_message['personEmail'], len(each_message['mentionedPeople']), str(int(timestamp)))
+                                influx_string += ('WxTSpaceMentionAnalysis,room_id=%s,room_title="%s",mentionie=%s,mentioner=%s total_mentioned=%s %s \n' %
+                                                  (json_for_room_analysis["id"], json_for_room_analysis["title"], person_dictionary[each_mention], each_message['personEmail'], len(each_message['mentionedPeople']), str(int(timestamp))))
                             except KeyError as e:
                                 print("couldnt find personId = %s" % each_mention)
-                # elif each_message.get('isModerator', None) is not None and each_message.get('isMonitor', None) is not None:
-                #     polarity = 0
-                #     subjectivity = 0
-                #     words = 0
-                #     sentences = 0
-                #     impact_words = 0
-                #     is_thread = False
-                #     is_thread_response = False
-                #     thread_position = 0
-                #     thread_size = 0
-                #     has_file = 0
-                #     mentioned_people = 0
-                #     print("user %s was added to the space isModerator=%s, isMonitor=%s" % (each_message['personEmail'], each_message['isModerator'], each_message['isMonitor']))
+
                 else:
                     polarity = 0
                     subjectivity = 0
@@ -234,12 +227,13 @@ def check_space_for_new_content(last_x_messages=12):
                     mentioned_people = 0
                     print("no text or file")
                     print(each_message)
-                influx_string += "WxTSpaceMessageAnalysis," \
-                                 "personId=%s,is_thread=%s,is_thread_response=%s,thread_position=%s,inside_working_hours=%s " \
-                                 "polarity=%s,subjectivity=%s,words=%s,sentences=%s," \
-                                 "impact_words=%s,positive_words=%s,negative_words=%s," \
-                                 "thread_size=%s,attached_files=%s,mentioned_people=%s %s \n" % \
-                                 (each_message['personEmail'], is_thread, is_thread_response, thread_position, inside_working_hours,
+                influx_string += ('WxTSpaceMessageAnalysis,room_id=%s,room_title="%s",'
+                                  'personId=%s,is_thread=%s,is_thread_response=%s,thread_position=%s,inside_working_hours=%s '
+                                  'polarity=%s,subjectivity=%s,words=%s,sentences=%s,'
+                                  'impact_words=%s,positive_words=%s,negative_words=%s,'
+                                  'thread_size=%s,attached_files=%s,mentioned_people=%s %s \n') % \
+                                 (json_for_room_analysis["id"], json_for_room_analysis["title"],
+                                  each_message['personEmail'], is_thread, is_thread_response, thread_position, inside_working_hours,
                                   polarity, subjectivity, words, sentences,
                                   impact_words, positive_words, neagative_words,
                                   thread_size, has_file, mentioned_people, str(int(timestamp)))
