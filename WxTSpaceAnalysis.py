@@ -70,7 +70,9 @@ from textblob import TextBlob
 import datetime
 import sys
 import traceback
-
+from wordcloud import STOPWORDS
+from wordcloud import WordCloud
+import os
 import credentials
 
 WXT_SPACE_ID = credentials.WXT_SPACE_ID
@@ -78,9 +80,66 @@ WXT_ACCESS_TOKEN = credentials.WXT_ACCESS_TOKEN
 LOGFILE = credentials.LOGFILE
 THREAD_TO_BREAK = threading.Event()
 INFLUX_DB_PATH = credentials.INFLUX_DB_PATH
+ABSOLUTE_PATH = credentials.ABSOLUTE_PATH
 
 WORKING_DAYS = [0, 1, 2, 3, 4]  # 0=Monday, 6=Sunday
 WORKING_HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18] # 24 hour clock
+
+
+
+def build_word_cloud(image_width=800, image_height=600, wxt_space_id="", words_array=[]):
+    function_logger = logger.getChild("%s.%s.%s" % (inspect.stack()[2][3], inspect.stack()[1][3], inspect.stack()[0][3]))
+    function_logger.info("build_word_cloud")
+    try:
+        # data_set_image_variable = []
+        # function_logger.debug("made temp array")
+        # today_minus_days_variable = str(datetime.datetime.now() + datetime.timedelta(days=-days_of_data))
+        # function_logger.debug("time delta calulated")
+        # for filename in os.listdir(RESULTS_DIRECTORY):
+        #     if ".log" in filename:
+        #         full_file = str(RESULTS_DIRECTORY + filename)
+        #         f = open(full_file)
+        #         for each in f:
+        #             timestamp = each.split(" - ")[0]
+        #             sku = each.split("#####")[1].replace("\n", "")
+        #             if timestamp > today_minus_days_variable:
+        #                 data_set_image_variable.append(sku)
+        # function_logger.debug("array length variable = " + str(len(data_set_image_variable)))
+
+        def array_to_dict_frequency(array):
+            dictionary = {}
+            for sku_key in array:
+                if dictionary.get(sku_key) is None:
+                    dictionary[sku_key] = 1
+                else:
+                    dictionary[sku_key] += 1
+            array_length = len(array)
+
+            for key in dictionary.keys():
+                dictionary[key] = dictionary[key] / array_length
+            return dictionary
+
+        data_set_image_dict_variable = array_to_dict_frequency(words_array)
+        function_logger.debug("array length variable = " + str(len(data_set_image_dict_variable)))
+
+        def create_word_cloud(output_filename, input_dictionary):
+            cloud = WordCloud(background_color="black", max_words=100, stopwords=set(STOPWORDS), include_numbers=True,
+                              width=image_width, height=image_height)
+            cloud.generate_from_frequencies(input_dictionary)
+            output_filename = ABSOLUTE_PATH + output_filename + ".png"
+            cloud.to_file(output_filename)
+            word_cloud_image = cloud.to_image()
+            return word_cloud_image
+        output_file_name_variable = "word_graphic_" + str(wxt_space_id) + "_" + str(image_width) + "x" + str(image_width)
+        return create_word_cloud(output_filename=output_file_name_variable, input_dictionary=data_set_image_dict_variable)
+    except Exception as e:
+        function_logger.error("something went bad creating WordClouds")
+        function_logger.error("Unexpected error:" + str(sys.exc_info()[0]))
+        function_logger.error("Unexpected error:" + str(e))
+        function_logger.error("TRACEBACK=" + str(traceback.format_exc()))
+        # api.messages.create(WXT_ALARMS_BOT_ROOM_ID, text=str("TRACEBACK=%s" % str(traceback.format_exc())))
+        return
+
 
 
 def check_working_hours(date_time_to_check):
@@ -97,6 +156,7 @@ def check_space_for_new_content(last_x_messages=12):
     function_logger = logger.getChild("%s.%s.%s" % (inspect.stack()[2][3], inspect.stack()[1][3], inspect.stack()[0][3]))
     function_logger.info("checking space for new content")
     for each_room in WXT_SPACE_ID:
+        words_array = []
         room_url = "https://webexapis.com/v1/rooms/%s" % each_room
         url = "https://webexapis.com/v1/messages?roomId=%s&max=%s" % (each_room, last_x_messages)  # 1000000000
         headers = {"Authorization": "Bearer %s" % WXT_ACCESS_TOKEN}
@@ -138,6 +198,8 @@ def check_space_for_new_content(last_x_messages=12):
                 timestamp = datetime.datetime.timestamp(datetime.datetime.strptime(str(each_message['created']), "%Y-%m-%dT%H:%M:%S.%fZ")) * 1000000000
                 inside_working_hours = check_working_hours(datetime.datetime.strptime(str(each_message['created']), "%Y-%m-%dT%H:%M:%S.%fZ"))
                 if each_message.get('text'):
+                    for word in each_message.get('text'):
+                        words_array.append(word)
                     blob = TextBlob(each_message['text'])
                     polarity = blob.polarity
                     subjectivity = blob.subjectivity
@@ -238,6 +300,7 @@ def check_space_for_new_content(last_x_messages=12):
                                   impact_words, positive_words, neagative_words,
                                   thread_size, has_file, mentioned_people, str(int(timestamp)))
             update_influx(influx_string)
+            build_word_cloud(wxt_space_id=each_room, words_array=words_array)
         else:
             function_logger.critical("something went wrong didnt get status 200 from WxT instead got %s" % response.status_code)
             function_logger.critical("following bad status code content was :- %s" % response.content)
