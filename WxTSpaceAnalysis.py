@@ -237,7 +237,7 @@ def check_space_for_new_content(last_x_messages=12):
                         for each_mention in each_message['mentionedPeople']:
                             try:
                                 influx_string += ('WxTSpaceMentionAnalysis,room_id=%s,room_title="%s",mentionie=%s,mentioner=%s total_mentioned=%s %s \n' %
-                                                  (json_for_room_analysis["id"], json_for_room_analysis["title"], person_dictionary[each_mention], each_message['personEmail'], len(each_message['mentionedPeople']), str(int(timestamp))))
+                                                  (json_for_room_analysis["id"], json_for_room_analysis["title"].replace(" ", "\ "), person_dictionary[each_mention], each_message['personEmail'], len(each_message['mentionedPeople']), str(int(timestamp))))
                             except KeyError as e:
                                 function_logger.critical("couldnt find personId = %s" % each_mention)
                 elif each_message.get('files'):
@@ -294,7 +294,7 @@ def check_space_for_new_content(last_x_messages=12):
                                   'polarity=%s,subjectivity=%s,words=%s,sentences=%s,'
                                   'impact_words=%s,positive_words=%s,negative_words=%s,'
                                   'thread_size=%s,attached_files=%s,mentioned_people=%s %s \n') % \
-                                 (json_for_room_analysis["id"], json_for_room_analysis["title"],
+                                 (json_for_room_analysis["id"], json_for_room_analysis["title"].replace(" ", "\ "),
                                   each_message['personEmail'], is_thread, is_thread_response, thread_position, inside_working_hours,
                                   polarity, subjectivity, words, sentences,
                                   impact_words, positive_words, neagative_words,
